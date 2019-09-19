@@ -20,31 +20,23 @@
 #include <Wire.h>
 #include <MAX30105.h>
 #include <heartRate.h>
+#include <ESP8266WiFi.h>
 
 MAX30105 particleSensor;
 
-#include <ESP8266WiFi.h>
-
 #include "configuration.h"
+#include "statum_hrm.h"
 
-const byte RATE_SIZE = 4; //Increase this for more averaging. 4 is good.
-byte rates[RATE_SIZE]; //Array of heart rates
-byte rateSpot = 0;
-long lastBeat = 0; //Time at which the last beat occurred
-
-float beatsPerMinute;
-int beatAvg;
-
-unsigned long lastPrint = 0;
+SmoothedValues* pulses; // The most recently calculated pulse widths.
+State state;            // The current state of the statum heart rate monitor.
 
 void setup() {
 	Serial.begin(9600);
 
   Serial.print("Initialising Particle Sensor...");
-  // Wire.begin();
   if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) //Use default I2C port, 400kHz speed
   {
-    Serial.println("MAX30105 was not found. Please check wiring/power. ");
+    Serial.println("MAX30101 was not found. Please check wiring/power. ");
     while (1);
   }
   particleSensor.setup(); //Configure sensor with default settings
@@ -64,49 +56,12 @@ void setup() {
   }
   Serial.println(" Done!");
 
+  pulses = new_smoothed(7); // Singleton that exists for the entire running time.
+
   // Initalise the state of the Statum HRM.
-  //unsigned long t = millis();
-  //state = State{"", 0, t, t, 0.0f, 0.0f, &SampleMode};
+  state = State{"", millis(), pulses, &SampleMode};
 }
 
-
 void loop() {
-   long irValue = particleSensor.getIR();
-   unsigned long t = millis();
-
-  // if (irValue > 5000 && checkForBeat(irValue) == true) {
-  //   //We sensed a beat!
-  //   long delta = t - lastBeat;
-  //   lastBeat = t;
-
-  //   beatsPerMinute = 60 / (delta / 1000.0);
-
-  //   if (beatsPerMinute < 255 && beatsPerMinute > 20)
-  //   {
-  //     rates[rateSpot++] = (byte)beatsPerMinute; //Store this reading in the array
-  //     rateSpot %= RATE_SIZE; //Wrap variable
-
-  //     //Take average of readings
-  //     beatAvg = 0;
-  //     for (byte x = 0 ; x < RATE_SIZE ; x++)
-  //       beatAvg += rates[x];
-  //     beatAvg /= RATE_SIZE;
-  //   }
-  // }
-
-  if (irValue > 5000 && checkForBeat(irValue) == true) {
-    Serial.print("pulse: ");
-    beatsPerMinute++;
-    Serial.println(beatsPerMinute);
-  }
-
-  if ((t - lastPrint) > 15000) {
-    Serial.print("BPM: ");
-    Serial.println(beatsPerMinute * 4);
-    lastPrint = t;
-    beatsPerMinute = 0;
-
-  }
-
-  //delay(100);
+  state = state.update(&state, millis(), particleSensor.getIR());
 }
