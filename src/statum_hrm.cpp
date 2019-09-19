@@ -27,7 +27,8 @@ State SampleMode(const State_struct *currentState, unsigned long currentTime, lo
     float deltaP = ((currentTime - currentState->lastPulse) / 1000.0f);
 
     // Min heart rate is set at 50 bpm (sometimes the sensor misses a beat or two.)
-    if (deltaP < 1.2) {
+    // Max heart rate is set at 220 bpm.
+    if (deltaP > 0.27 && deltaP < 1.2) {
       add_value(currentState->pulses, deltaP);
     }
 
